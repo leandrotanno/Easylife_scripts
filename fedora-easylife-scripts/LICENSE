@@ -1,0 +1,46 @@
+MIT License
+
+Copyright (c) 2025 Fedora Development Scripts
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## About These Scripts
+
+These Fedora configuration scripts are designed for developers working with:
+- Python development and Data Science
+- JavaScript/Node.js development  
+- Docker-first development environments
+- Full-stack development workflows
+
+Feel free to use, modify, and distribute these scripts as needed for your development setup.
+
+### Scripts Included:
+- `fedora-setup.sh` - Base system configuration
+- `fedora-post-install.sh` - Docker-first development environment
+- `display-switcher.sh` - Display and performance optimization
+
+### Usage:
+1. Make scripts executable: `chmod +x *.sh`
+2. Run base setup: `sudo ./fedora-setup.sh install`
+3. Configure development: `./fedora-post-install.sh all`
+4. Optimize display: `./display-switcher.sh auto-fix`
+
+No warranty provided - use at your own risk. Test in a VM first if unsure.
