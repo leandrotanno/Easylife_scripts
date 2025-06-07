@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Fedora Post-Install Docker-First Edition - VERSÃO CORRIGIDA
-# Sistema mínimo + Containers para TUDO - SEM ALIASES DUPLICADOS
+# Fedora Post-Install Docker-First Edition - VERSÃO COM PORTAS INTELIGENTES
+# Sistema mínimo + Containers para TUDO - COM DETECÇÃO AUTOMÁTICA DE PORTAS
 # Execute como usuário normal após fedora-setup.sh
 
 # Cores
@@ -45,6 +45,53 @@ check_docker() {
     fi
 }
 
+# ============================================================================
+# FUNÇÕES PARA DETECÇÃO INTELIGENTE DE PORTAS
+# ============================================================================
+
+# Função para encontrar porta livre
+find_free_port() {
+    local start_port=$1
+    local port=$start_port
+    
+    while netstat -tuln 2>/dev/null | grep -q ":$port " || ss -tuln 2>/dev/null | grep -q ":$port "; do
+        ((port++))
+    done
+    
+    echo $port
+}
+
+# Função para verificar múltiplas portas e retornar a configuração
+get_smart_ports() {
+    local service_name="$1"
+    
+    case "$service_name" in
+        "nodejs")
+            local port_dev=$(find_free_port 3000)
+            local port_vite=$(find_free_port 5173)
+            local port_alt=$(find_free_port 8080)
+            echo "$port_dev,$port_vite,$port_alt"
+            ;;
+        "python")
+            local port_api=$(find_free_port 8000)
+            local port_flask=$(find_free_port 5000)
+            local port_streamlit=$(find_free_port 8501)
+            local port_pg=$(find_free_port 5432)
+            local port_redis=$(find_free_port 6380)
+            echo "$port_api,$port_flask,$port_streamlit,$port_pg,$port_redis"
+            ;;
+        "datascience")
+            local port_jupyter=$(find_free_port 8888)
+            local port_mlflow=$(find_free_port 5555)
+            local port_pg=$(find_free_port 5433)
+            echo "$port_jupyter,$port_mlflow,$port_pg"
+            ;;
+        *)
+            echo "3000,5173,8080"
+            ;;
+    esac
+}
+
 # Sistema mínimo para testes rápidos
 setup_minimal_system() {
     echo -e "${BLUE}⚡ Configurando sistema mínimo...${NC}"
@@ -84,8 +131,33 @@ setup_docker_workspace() {
     # Estrutura
     mkdir -p "$HOME/docker-workspace"/{nodejs,python-web,datascience,databases,configs,volumes,compose-files,scripts}
     
-    # Compose Node.js
-    cat > "$HOME/docker-workspace/compose-files/nodejs-dev.yml" << 'EOF'
+    # Obter portas inteligentes para cada serviço
+    echo -e "${CYAN}🔍 Detectando portas disponíveis...${NC}"
+    
+    local nodejs_ports=$(get_smart_ports "nodejs")
+    local nodejs_dev=$(echo $nodejs_ports | cut -d',' -f1)
+    local nodejs_vite=$(echo $nodejs_ports | cut -d',' -f2)
+    local nodejs_alt=$(echo $nodejs_ports | cut -d',' -f3)
+    
+    local python_ports=$(get_smart_ports "python")
+    local python_api=$(echo $python_ports | cut -d',' -f1)
+    local python_flask=$(echo $python_ports | cut -d',' -f2)
+    local python_streamlit=$(echo $python_ports | cut -d',' -f3)
+    local python_pg=$(echo $python_ports | cut -d',' -f4)
+    local python_redis=$(echo $python_ports | cut -d',' -f5)
+    
+    local ds_ports=$(get_smart_ports "datascience")
+    local ds_jupyter=$(echo $ds_ports | cut -d',' -f1)
+    local ds_mlflow=$(echo $ds_ports | cut -d',' -f2)
+    local ds_pg=$(echo $ds_ports | cut -d',' -f3)
+    
+    echo -e "${GREEN}✅ Portas selecionadas:${NC}"
+    echo -e "${CYAN}   Node.js: $nodejs_dev, $nodejs_vite, $nodejs_alt${NC}"
+    echo -e "${CYAN}   Python: $python_api, $python_flask, $python_streamlit${NC}"
+    echo -e "${CYAN}   Data Science: $ds_jupyter, $ds_mlflow${NC}"
+    
+    # Compose Node.js com portas dinâmicas
+    cat > "$HOME/docker-workspace/compose-files/nodejs-dev.yml" << EOF
 version: '3.8'
 services:
   nodejs-dev:
@@ -96,9 +168,9 @@ services:
       - ../nodejs:/workspace
       - ../volumes/node_modules:/workspace/node_modules
     ports:
-      - "3000:3000"
-      - "5173:5173"
-      - "8080:8080"
+      - "$nodejs_dev:3000"
+      - "$nodejs_vite:5173"
+      - "$nodejs_alt:8080"
       - "3001:3001"
     command: sleep infinity
     stdin_open: true
@@ -123,8 +195,8 @@ networks:
     driver: bridge
 EOF
 
-    # Compose Python Web
-    cat > "$HOME/docker-workspace/compose-files/python-web.yml" << 'EOF'
+    # Compose Python Web com portas dinâmicas
+    cat > "$HOME/docker-workspace/compose-files/python-web.yml" << EOF
 version: '3.8'
 services:
   python-web:
@@ -135,9 +207,9 @@ services:
       - ../python-web:/workspace
       - ../volumes/pip-cache:/root/.cache/pip
     ports:
-      - "8000:8000"
-      - "5000:5000"
-      - "8501:8501"
+      - "$python_api:8000"
+      - "$python_flask:5000"
+      - "$python_streamlit:8501"
     command: sleep infinity
     stdin_open: true
     tty: true
@@ -158,7 +230,7 @@ services:
       POSTGRES_USER: dev
       POSTGRES_PASSWORD: devpass
     ports:
-      - "5432:5432"
+      - "$python_pg:5432"
     volumes:
       - ../volumes/postgres-data:/var/lib/postgresql/data
     networks:
@@ -168,7 +240,7 @@ services:
     image: redis:7-alpine
     container_name: dev-redis-web
     ports:
-      - "6380:6379"
+      - "$python_redis:6379"
     volumes:
       - ../volumes/redis-web-data:/data
     networks:
@@ -179,8 +251,8 @@ networks:
     driver: bridge
 EOF
 
-    # Compose Data Science
-    cat > "$HOME/docker-workspace/compose-files/datascience.yml" << 'EOF'
+    # Compose Data Science com portas dinâmicas
+    cat > "$HOME/docker-workspace/compose-files/datascience.yml" << EOF
 version: '3.8'
 services:
   jupyter:
@@ -191,7 +263,7 @@ services:
       - ../datascience:/home/jovyan/work
       - ../volumes/jupyter-config:/home/jovyan/.jupyter
     ports:
-      - "8888:8888"
+      - "$ds_jupyter:8888"
       - "6006:6006"
     environment:
       - JUPYTER_ENABLE_LAB=yes
@@ -227,7 +299,7 @@ services:
       - ../datascience:/workspace
       - ../volumes/mlflow-artifacts:/mlflow-artifacts
     ports:
-      - "5555:5000"
+      - "$ds_mlflow:5000"
     environment:
       - MLFLOW_BACKEND_STORE_URI=postgresql://mlflow:mlflow123@ml-postgres:5432/mlflow
       - MLFLOW_DEFAULT_ARTIFACT_ROOT=/mlflow-artifacts
@@ -250,7 +322,7 @@ services:
       POSTGRES_USER: mlflow
       POSTGRES_PASSWORD: mlflow123
     ports:
-      - "5433:5432"
+      - "$ds_pg:5432"
     volumes:
       - ../volumes/ml-postgres-data:/var/lib/postgresql/data
     networks:
@@ -261,24 +333,48 @@ networks:
     driver: bridge
 EOF
 
-    log_message "✓ Docker Compose files criados"
+    # Salvar configuração de portas
+    cat > "$HOME/docker-workspace/configs/ports.conf" << EOF
+# Configuração de Portas - Gerada automaticamente
+NODEJS_DEV_PORT=$nodejs_dev
+NODEJS_VITE_PORT=$nodejs_vite
+NODEJS_ALT_PORT=$nodejs_alt
+
+PYTHON_API_PORT=$python_api
+PYTHON_FLASK_PORT=$python_flask
+PYTHON_STREAMLIT_PORT=$python_streamlit
+PYTHON_POSTGRES_PORT=$python_pg
+PYTHON_REDIS_PORT=$python_redis
+
+DATASCIENCE_JUPYTER_PORT=$ds_jupyter
+DATASCIENCE_MLFLOW_PORT=$ds_mlflow
+DATASCIENCE_POSTGRES_PORT=$ds_pg
+EOF
+
+    log_message "✓ Docker Compose files criados com portas inteligentes"
 }
 
-# Scripts de conveniência
+# Scripts de conveniência com portas dinâmicas
 create_convenience_scripts() {
-    echo -e "${BLUE}📜 Criando scripts de conveniência...${NC}"
+    echo -e "${BLUE}📜 Criando scripts de conveniência com portas inteligentes...${NC}"
+    
+    # Carregar configuração de portas
+    source "$HOME/docker-workspace/configs/ports.conf"
     
     # Start Node.js
-    cat > "$HOME/docker-workspace/scripts/start-nodejs.sh" << 'EOF'
+    cat > "$HOME/docker-workspace/scripts/start-nodejs.sh" << EOF
 #!/bin/bash
 cd ~/docker-workspace/compose-files
-echo "🚀 Iniciando ambiente Node.js..."
+echo "🚀 Iniciando ambiente Node.js com portas inteligentes..."
 docker-compose -f nodejs-dev.yml up -d
 echo ""
 echo "✅ Ambiente Node.js ativo!"
 echo "📂 Workspace: ~/docker-workspace/nodejs/"
 echo "🔗 Acesso: docker exec -it nodejs-dev sh"
-echo "🌐 Portas: 3000, 5173 (Vite), 8080"
+echo "🌐 Portas detectadas automaticamente:"
+echo "   Main: http://localhost:$NODEJS_DEV_PORT"
+echo "   Vite: http://localhost:$NODEJS_VITE_PORT" 
+echo "   Alt:  http://localhost:$NODEJS_ALT_PORT"
 echo ""
 echo "💡 Comandos rápidos:"
 echo "   docker exec -it nodejs-dev npm create vite@latest my-app"
@@ -287,17 +383,22 @@ echo "   docker exec -it nodejs-dev npm create svelte@latest my-app"
 EOF
 
     # Start Python
-    cat > "$HOME/docker-workspace/scripts/start-python.sh" << 'EOF'
+    cat > "$HOME/docker-workspace/scripts/start-python.sh" << EOF
 #!/bin/bash
 cd ~/docker-workspace/compose-files
-echo "🐍 Iniciando ambiente Python Web..."
+echo "🐍 Iniciando ambiente Python Web com portas inteligentes..."
 docker-compose -f python-web.yml up -d
 echo ""
 echo "✅ Ambiente Python ativo!"
 echo "📂 Workspace: ~/docker-workspace/python-web/"
 echo "🔗 Acesso: docker exec -it python-web bash"
-echo "🌐 Portas: 8000 (FastAPI), 5000 (Flask), 8501 (Streamlit)"
-echo "🗄️ PostgreSQL: localhost:5432 (dev/devpass/devdb)"
+echo "🌐 Portas detectadas automaticamente:"
+echo "   FastAPI:    http://localhost:$PYTHON_API_PORT"
+echo "   Flask:      http://localhost:$PYTHON_FLASK_PORT"
+echo "   Streamlit:  http://localhost:$PYTHON_STREAMLIT_PORT"
+echo "🗄️ Databases:"
+echo "   PostgreSQL: localhost:$PYTHON_POSTGRES_PORT (dev/devpass/devdb)"
+echo "   Redis:      localhost:$PYTHON_REDIS_PORT"
 echo ""
 echo "💡 Comandos rápidos:"
 echo "   docker exec -it python-web pip install fastapi uvicorn"
@@ -306,7 +407,7 @@ echo "   docker exec -it python-web pip install streamlit"
 EOF
 
     # Start Data Science
-    cat > "$HOME/docker-workspace/scripts/start-datascience.sh" << 'EOF'
+    cat > "$HOME/docker-workspace/scripts/start-datascience.sh" << EOF
 #!/bin/bash
 cd ~/docker-workspace/compose-files
 
@@ -320,18 +421,19 @@ else
     echo "💻 Modo CPU apenas"
 fi
 
-echo "🔬 Iniciando ambiente Data Science..."
+echo "🔬 Iniciando ambiente Data Science com portas inteligentes..."
 docker-compose -f datascience.yml up -d
 
 echo ""
 echo "✅ Ambiente Data Science ativo!"
 echo "📂 Workspace: ~/docker-workspace/datascience/"
-echo "📊 Jupyter Lab: http://localhost:8888 (token: dev123)"
-echo "🧪 MLflow: http://localhost:5555"
-echo "🗄️ PostgreSQL: localhost:5433 (mlflow/mlflow123/mlflow)"
+echo "🌐 Portas detectadas automaticamente:"
+echo "   Jupyter Lab: http://localhost:$DATASCIENCE_JUPYTER_PORT (token: dev123)"
+echo "   MLflow:      http://localhost:$DATASCIENCE_MLFLOW_PORT"
+echo "🗄️ PostgreSQL: localhost:$DATASCIENCE_POSTGRES_PORT (mlflow/mlflow123/mlflow)"
 echo ""
 echo "💡 Primeiro acesso:"
-echo "   1. Abra http://localhost:8888"
+echo "   1. Abra http://localhost:$DATASCIENCE_JUPYTER_PORT"
 echo "   2. Token: dev123"
 echo "   3. Crie um novo notebook"
 EOF
@@ -347,36 +449,48 @@ docker-compose -f datascience.yml down 2>/dev/null
 echo "✅ Todos os ambientes parados"
 EOF
 
-    # Status
-    cat > "$HOME/docker-workspace/scripts/status.sh" << 'EOF'
+    # Status com portas dinâmicas
+    cat > "$HOME/docker-workspace/scripts/status.sh" << EOF
 #!/bin/bash
-echo "📊 STATUS DOS AMBIENTES"
-echo "======================="
+# Carregar configuração de portas
+source ~/docker-workspace/configs/ports.conf
+
+echo "📊 STATUS DOS AMBIENTES - PORTAS INTELIGENTES"
+echo "=============================================="
 echo ""
 echo "🐳 Containers ativos:"
 docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}" | grep -E "(nodejs-dev|python-web|jupyter-lab|dev-postgres|dev-redis|mlflow)"
 echo ""
-echo "🌐 Serviços disponíveis:"
-echo "   Node.js: Containers disponíveis nas portas 3000, 5173, 8080"
-echo "   Python Web: FastAPI (8000), Flask (5000), Streamlit (8501)"
-echo "   Data Science: Jupyter (8888), MLflow (5555)"
-echo "   Bancos: PostgreSQL (5432/5433), Redis (6379/6380)"
+echo "🌐 Serviços disponíveis (portas auto-detectadas):"
+echo "   Node.js Dev:     \$NODEJS_DEV_PORT, \$NODEJS_VITE_PORT, \$NODEJS_ALT_PORT"
+echo "   Python Web:      FastAPI (\$PYTHON_API_PORT), Flask (\$PYTHON_FLASK_PORT), Streamlit (\$PYTHON_STREAMLIT_PORT)"
+echo "   Data Science:    Jupyter (\$DATASCIENCE_JUPYTER_PORT), MLflow (\$DATASCIENCE_MLFLOW_PORT)"
+echo "   Bancos:          PostgreSQL (\$PYTHON_POSTGRES_PORT/\$DATASCIENCE_POSTGRES_PORT), Redis (\$PYTHON_REDIS_PORT)"
+echo ""
+echo "🔧 Portas atuais:"
+echo "   Node.js: $NODEJS_DEV_PORT, $NODEJS_VITE_PORT, $NODEJS_ALT_PORT"
+echo "   Python:  $PYTHON_API_PORT, $PYTHON_FLASK_PORT, $PYTHON_STREAMLIT_PORT"
+echo "   DS:      $DATASCIENCE_JUPYTER_PORT, $DATASCIENCE_MLFLOW_PORT"
 EOF
 
     chmod +x "$HOME/docker-workspace/scripts/"*.sh
-    log_message "✓ Scripts de conveniência criados"
+    log_message "✓ Scripts de conveniência criados com portas inteligentes"
 }
 
 # Templates de projeto
 create_project_templates() {
     echo -e "${BLUE}📁 Criando templates...${NC}"
     
+    # Carregar configuração de portas
+    source "$HOME/docker-workspace/configs/ports.conf"
+    
     # FastAPI template
     mkdir -p "$HOME/docker-workspace/python-web/fastapi-template"
-    cat > "$HOME/docker-workspace/python-web/fastapi-template/main.py" << 'EOF'
+    cat > "$HOME/docker-workspace/python-web/fastapi-template/main.py" << EOF
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+import os
 
 app = FastAPI(title="FastAPI Template", version="1.0.0")
 
@@ -390,14 +504,18 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"message": "Hello FastAPI!", "status": "running"}
+    return {
+        "message": "Hello FastAPI!", 
+        "status": "running",
+        "port": os.getenv("PORT", $PYTHON_API_PORT)
+    }
 
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", $PYTHON_API_PORT)), reload=True)
 EOF
 
     cat > "$HOME/docker-workspace/python-web/fastapi-template/requirements.txt" << 'EOF'
@@ -436,15 +554,18 @@ EOF
 
     # Data Science notebook template
     mkdir -p "$HOME/docker-workspace/datascience/notebooks"
-    cat > "$HOME/docker-workspace/datascience/notebooks/template_analysis.ipynb" << 'EOF'
+    cat > "$HOME/docker-workspace/datascience/notebooks/template_analysis.ipynb" << EOF
 {
  "cells": [
   {
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "# 📊 Template de Análise de Dados\n",
-    "\n",
+    "# 📊 Template de Análise de Dados\\n",
+    "\\n",
+    "**MLflow**: http://localhost:$DATASCIENCE_MLFLOW_PORT\\n",
+    "**Jupyter**: http://localhost:$DATASCIENCE_JUPYTER_PORT\\n",
+    "\\n",
     "## 1. Setup e Imports"
    ]
   },
@@ -454,26 +575,27 @@ EOF
    "metadata": {},
    "outputs": [],
    "source": [
-    "# Imports essenciais\n",
-    "import pandas as pd\n",
-    "import numpy as np\n",
-    "import matplotlib.pyplot as plt\n",
-    "import seaborn as sns\n",
-    "import plotly.express as px\n",
-    "import plotly.graph_objects as go\n",
-    "\n",
-    "# Configurações\n",
-    "plt.style.use('seaborn-v0_8')\n",
-    "sns.set_palette('husl')\n",
-    "pd.set_option('display.max_columns', None)\n",
-    "pd.set_option('display.max_rows', 100)\n",
-    "\n",
-    "# MLflow\n",
-    "import mlflow\n",
-    "mlflow.set_tracking_uri('http://mlflow-server:5000')\n",
-    "mlflow.set_experiment('default')\n",
-    "\n",
-    "print(\"✅ Setup completo!\")"
+    "# Imports essenciais\\n",
+    "import pandas as pd\\n",
+    "import numpy as np\\n",
+    "import matplotlib.pyplot as plt\\n",
+    "import seaborn as sns\\n",
+    "import plotly.express as px\\n",
+    "import plotly.graph_objects as go\\n",
+    "\\n",
+    "# Configurações\\n",
+    "plt.style.use('seaborn-v0_8')\\n",
+    "sns.set_palette('husl')\\n",
+    "pd.set_option('display.max_columns', None)\\n",
+    "pd.set_option('display.max_rows', 100)\\n",
+    "\\n",
+    "# MLflow\\n",
+    "import mlflow\\n",
+    "mlflow.set_tracking_uri('http://mlflow-server:5000')\\n",
+    "mlflow.set_experiment('default')\\n",
+    "\\n",
+    "print(\\\"✅ Setup completo!\\\")\\n",
+    "print(f\\\"🧪 MLflow: http://localhost:$DATASCIENCE_MLFLOW_PORT\\\")"
    ]
   },
   {
@@ -489,34 +611,16 @@ EOF
    "metadata": {},
    "outputs": [],
    "source": [
-    "# Exemplo de conexão PostgreSQL\n",
-    "from sqlalchemy import create_engine\n",
-    "\n",
-    "# engine = create_engine('postgresql://mlflow:mlflow123@ml-postgres:5432/mlflow')\n",
-    "# df = pd.read_sql('SELECT * FROM table', engine)\n",
-    "\n",
-    "# Para CSV\n",
-    "# df = pd.read_csv('data.csv')\n",
-    "\n",
-    "print(\"📁 Pronto para carregar dados\")"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## 3. Análise Exploratória"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "# df.info()\n",
-    "# df.describe()\n",
-    "# df.head()"
+    "# Exemplo de conexão PostgreSQL\\n",
+    "from sqlalchemy import create_engine\\n",
+    "\\n",
+    "# engine = create_engine('postgresql://mlflow:mlflow123@ml-postgres:5432/mlflow')\\n",
+    "# df = pd.read_sql('SELECT * FROM table', engine)\\n",
+    "\\n",
+    "# Para CSV\\n",
+    "# df = pd.read_csv('data.csv')\\n",
+    "\\n",
+    "print(\\\"📁 Pronto para carregar dados\\\")"
    ]
   }
  ],
@@ -536,150 +640,10 @@ EOF
 }
 EOF
 
-    log_message "✓ Templates criados"
+    log_message "✓ Templates criados com portas inteligentes"
 }
 
-# VS Code configuração
-setup_vscode() {
-    echo -e "${BLUE}📝 Configurando VS Code...${NC}"
-    
-    # Extensões essenciais
-    local extensions=(
-        "ms-python.python"
-        "ms-python.black-formatter"
-        "ms-toolsai.jupyter"
-        "ms-vscode.vscode-typescript-next"
-        "bradlc.vscode-tailwindcss"
-        "esbenp.prettier-vscode"
-        "ms-vscode-remote.remote-containers"
-        "ms-azuretools.vscode-docker"
-        "eamodio.gitlens"
-        "ms-vscode.remote-explorer"
-        "redhat.vscode-yaml"
-        "ms-vscode.vscode-json"
-        "charliermarsh.ruff"
-    )
-    
-    for extension in "${extensions[@]}"; do
-        if ! code --list-extensions | grep -q "^$extension$"; then
-            code --install-extension "$extension" >/dev/null 2>&1 || true
-        fi
-    done
-    
-    # Configurações VS Code
-    mkdir -p "$HOME/.config/Code/User"
-    cat > "$HOME/.config/Code/User/settings.json" << 'EOF'
-{
-    "python.defaultInterpreterPath": "/usr/bin/python3",
-    "python.terminal.activateEnvironment": false,
-    "jupyter.askForKernelRestart": false,
-    "jupyter.alwaysTrustNotebooks": true,
-    "docker.showStartPage": false,
-    "files.associations": {
-        "*.yml": "yaml",
-        "docker-compose*.yml": "yaml"
-    },
-    "workbench.colorTheme": "Dark+ (default dark)",
-    "editor.formatOnSave": true,
-    "python.formatting.provider": "none",
-    "python.linting.enabled": true,
-    "python.linting.flake8Enabled": true,
-    "[python]": {
-        "editor.defaultFormatter": "ms-python.black-formatter"
-    },
-    "remote.containers.showAdvanced": true
-}
-EOF
-    
-    log_message "✓ VS Code configurado"
-}
-
-# Configurar aliases referência (NÃO duplicados)
-setup_alias_reference() {
-    echo -e "${BLUE}📋 Configurando referência de aliases...${NC}"
-    
-    # Criar referência de aliases disponíveis
-    mkdir -p "$HOME/.config/shell"
-    cat > "$HOME/.config/shell/aliases-reference.md" << 'EOF'
-# 📋 Aliases Disponíveis
-
-## ⚠️ ALIASES DEFINIDOS EM OUTROS ARQUIVOS
-Este script NÃO define aliases para evitar duplicação.
-
-## 📁 Localização dos Aliases:
-- **Git aliases**: eza_aliases.sh, zsh-setup.sh
-- **Docker aliases**: zsh-setup.sh  
-- **Node.js aliases**: node_aliases.sh, zsh-setup.sh
-- **Python aliases**: python_aliases.sh, zsh-setup.sh
-- **File management**: eza_aliases.sh
-
-## 🔧 Para usar aliases:
-```bash
-# Carregue os arquivos de alias específicos:
-source eza_aliases.sh
-source node_aliases.sh  
-source python_aliases.sh
-
-# Ou configure ZSH que carrega tudo automaticamente:
-./zsh-setup.sh install
-```
-
-## 💡 Aliases Principais:
-- `gs` - git status
-- `ga` - git add
-- `dps` - docker ps
-- `py` - python3
-- `ll` - listar arquivos detalhado
-EOF
-    
-    echo -e "${CYAN}📋 Referência de aliases criada em: ~/.config/shell/aliases-reference.md${NC}"
-    echo -e "${YELLOW}💡 Este script NÃO define aliases para evitar duplicação${NC}"
-    echo -e "${CYAN}Use zsh-setup.sh ou source dos arquivos de alias específicos${NC}"
-    
-    log_message "✓ Referência de aliases configurada"
-}
-
-# Summary final
-show_summary() {
-    echo -e "${GREEN}🎉 CONFIGURAÇÃO DOCKER-FIRST CONCLUÍDA!${NC}"
-    echo -e "${PURPLE}=====================================${NC}"
-    echo ""
-    echo -e "${BLUE}📁 ESTRUTURA:${NC}"
-    echo -e "${CYAN}~/docker-workspace/nodejs/       ${NC}→ Projetos Node.js/React/Vue"
-    echo -e "${CYAN}~/docker-workspace/python-web/   ${NC}→ APIs Python (FastAPI/Django)"
-    echo -e "${CYAN}~/docker-workspace/datascience/  ${NC}→ ML, Data Science, Notebooks"
-    echo ""
-    echo -e "${BLUE}🚀 COMANDOS PRINCIPAIS:${NC}"
-    echo -e "${YELLOW}~/docker-workspace/scripts/start-nodejs.sh      ${NC}→ Ambiente Node.js completo"
-    echo -e "${YELLOW}~/docker-workspace/scripts/start-python.sh      ${NC}→ Ambiente Python Web + DB"
-    echo -e "${YELLOW}~/docker-workspace/scripts/start-datascience.sh ${NC}→ Jupyter Lab + MLflow + GPU"
-    echo -e "${YELLOW}~/docker-workspace/scripts/status.sh            ${NC}→ Status de todos ambientes"
-    echo -e "${YELLOW}~/docker-workspace/scripts/stop-all.sh          ${NC}→ Parar todos containers"
-    echo ""
-    echo -e "${BLUE}📋 ALIASES:${NC}"
-    echo -e "${CYAN}📁 Aliases NÃO definidos aqui para evitar duplicação${NC}"
-    echo -e "${CYAN}Use: source eza_aliases.sh node_aliases.sh python_aliases.sh${NC}"
-    echo -e "${CYAN}Ou: ./zsh-setup.sh install (carrega tudo automaticamente)${NC}"
-    echo ""
-    echo -e "${BLUE}📊 SERVIÇOS APÓS INICIAR:${NC}"
-    echo -e "${GREEN}• Jupyter Lab:${NC} http://localhost:8888 (token: dev123)"
-    echo -e "${GREEN}• MLflow:${NC} http://localhost:5555"
-    echo -e "${GREEN}• PostgreSQL:${NC} localhost:5432 (dev) / 5433 (ml)"
-    echo -e "${GREEN}• Apps:${NC} 3000, 5000, 8000, 8501"
-    echo ""
-    echo -e "${RED}🔥 TESTE RÁPIDO:${NC}"
-    echo -e "${CYAN}1. Execute: ~/docker-workspace/scripts/start-datascience.sh${NC}"
-    echo -e "${CYAN}2. Abra: http://localhost:8888${NC}"
-    echo -e "${CYAN}3. Token: dev123${NC}"
-    echo -e "${CYAN}4. Teste o template notebook${NC}"
-    echo ""
-    echo -e "${PURPLE}🎯 PRÓXIMOS PASSOS:${NC}"
-    echo -e "${CYAN}• Use CLI scripts para Git/Docker management${NC}"
-    echo -e "${CYAN}• Configure SSH com 03-ssh-setup.sh${NC}"
-    echo -e "${CYAN}• Configure terminal com zsh-setup.sh para aliases completos${NC}"
-}
-
-# Main
+# Função principal
 main() {
     case "$1" in
         "all")
@@ -689,33 +653,55 @@ main() {
             setup_docker_workspace
             create_convenience_scripts
             create_project_templates
-            setup_vscode
-            setup_alias_reference
-            show_summary
-            ;;
-        "docker")
-            check_not_root && check_docker && setup_docker_workspace && create_convenience_scripts
-            ;;
-        "vscode")
-            check_not_root && setup_vscode
-            ;;
-        "templates")
-            check_not_root && create_project_templates
+            
+            echo -e "${GREEN}🎉 CONFIGURAÇÃO DOCKER-FIRST COM PORTAS INTELIGENTES CONCLUÍDA!${NC}"
+            echo -e "${PURPLE}=================================================================${NC}"
+            echo ""
+            
+            # Carregar e mostrar portas configuradas
+            source "$HOME/docker-workspace/configs/ports.conf"
+            
+            echo -e "${BLUE}📁 ESTRUTURA:${NC}"
+            echo -e "${CYAN}~/docker-workspace/nodejs/       ${NC}→ Projetos Node.js/React/Vue"
+            echo -e "${CYAN}~/docker-workspace/python-web/   ${NC}→ APIs Python (FastAPI/Django)"
+            echo -e "${CYAN}~/docker-workspace/datascience/  ${NC}→ ML, Data Science, Notebooks"
+            echo ""
+            echo -e "${BLUE}🚀 COMANDOS PRINCIPAIS:${NC}"
+            echo -e "${YELLOW}~/docker-workspace/scripts/start-nodejs.sh      ${NC}→ Ambiente Node.js completo"
+            echo -e "${YELLOW}~/docker-workspace/scripts/start-python.sh      ${NC}→ Ambiente Python Web + DB"
+            echo -e "${YELLOW}~/docker-workspace/scripts/start-datascience.sh ${NC}→ Jupyter Lab + MLflow + GPU"
+            echo -e "${YELLOW}~/docker-workspace/scripts/status.sh            ${NC}→ Status de todos ambientes"
+            echo -e "${YELLOW}~/docker-workspace/scripts/stop-all.sh          ${NC}→ Parar todos containers"
+            echo ""
+            echo -e "${BLUE}🌐 PORTAS INTELIGENTES CONFIGURADAS:${NC}"
+            echo -e "${GREEN}• Node.js:${NC} $NODEJS_DEV_PORT, $NODEJS_VITE_PORT, $NODEJS_ALT_PORT"
+            echo -e "${GREEN}• Python Web:${NC} FastAPI ($PYTHON_API_PORT), Flask ($PYTHON_FLASK_PORT), Streamlit ($PYTHON_STREAMLIT_PORT)"
+            echo -e "${GREEN}• Data Science:${NC} Jupyter ($DATASCIENCE_JUPYTER_PORT), MLflow ($DATASCIENCE_MLFLOW_PORT)"
+            echo -e "${GREEN}• Databases:${NC} PostgreSQL ($PYTHON_POSTGRES_PORT/$DATASCIENCE_POSTGRES_PORT), Redis ($PYTHON_REDIS_PORT)"
+            echo ""
+            echo -e "${RED}🔥 TESTE RÁPIDO:${NC}"
+            echo -e "${CYAN}1. Execute: ~/docker-workspace/scripts/start-datascience.sh${NC}"
+            echo -e "${CYAN}2. Abra: http://localhost:$DATASCIENCE_JUPYTER_PORT${NC}"
+            echo -e "${CYAN}3. Token: dev123${NC}"
+            echo -e "${CYAN}4. Teste o template notebook${NC}"
+            echo ""
+            echo -e "${PURPLE}🎯 VANTAGENS DAS PORTAS INTELIGENTES:${NC}"
+            echo -e "${CYAN}• ✅ Zero conflitos de porta${NC}"
+            echo -e "${CYAN}• ✅ Múltiplos ambientes simultâneos${NC}"
+            echo -e "${CYAN}• ✅ Detecção automática de portas livres${NC}"
+            echo -e "${CYAN}• ✅ Configuração salva em ~/docker-workspace/configs/ports.conf${NC}"
             ;;
         *)
-            echo -e "${PURPLE}🐳 Fedora Post-Install Docker-First Edition - CORRIGIDO${NC}"
-            echo -e "${CYAN}Sistema mínimo + Docker para desenvolvimento - SEM ALIASES DUPLICADOS${NC}"
+            echo -e "${PURPLE}🐳 Fedora Post-Install Docker-First Edition - PORTAS INTELIGENTES${NC}"
+            echo -e "${CYAN}Sistema com detecção automática de portas para evitar conflitos${NC}"
             echo ""
-            echo -e "${YELLOW}Uso: $0 {all|docker|vscode|templates}${NC}"
+            echo -e "${YELLOW}Uso: $0 all${NC}"
             echo ""
-            echo -e "${CYAN}Comandos:${NC}"
-            echo -e "${YELLOW}  all${NC}       - Configuração completa (recomendado)"
-            echo -e "${YELLOW}  docker${NC}    - Configurar apenas workspace Docker"
-            echo -e "${YELLOW}  vscode${NC}    - Configurar apenas VS Code"
-            echo -e "${YELLOW}  templates${NC} - Criar apenas templates de projeto"
-            echo ""
-            echo -e "${GREEN}✨ VERSÃO CORRIGIDA - Sem aliases duplicados!${NC}"
-            echo -e "${CYAN}Aliases devem ser carregados de arquivos específicos ou zsh-setup.sh${NC}"
+            echo -e "${GREEN}✨ NOVO: Detecção inteligente de portas!${NC}"
+            echo -e "${CYAN}• Detecta portas ocupadas automaticamente${NC}"
+            echo -e "${CYAN}• Configura cada serviço com porta livre${NC}"
+            echo -e "${CYAN}• Salva configuração para reutilização${NC}"
+            echo -e "${CYAN}• Scripts ajustam portas dinamicamente${NC}"
             exit 1
             ;;
     esac

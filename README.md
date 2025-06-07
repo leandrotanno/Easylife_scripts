@@ -19,7 +19,7 @@ Transforma seu Fedora limpo em uma máquina de desenvolvimento completa com:
 ### **⚡ Instalação Express (Recomendada)**
 
 ```bash
-git clone https://github.com/seu-usuario/fedora-setup-scripts.git
+git clone https://github.com/leandrotanno/fedora-setup-scripts.git
 cd fedora-setup-scripts
 chmod +x *.sh
 
