@@ -110,7 +110,7 @@ show_main_menu() {
     list_projects "$WORKSPACE_DIR/nodejs" "Node.js/React/Vue"
     list_projects "$WORKSPACE_DIR/python-web" "Python Web"
     list_projects "$WORKSPACE_DIR/datascience" "Data Science"
-    list_projects "$WORKSPACE_DIR/fullstack" "Full-Stack"
+    list_projects "$WORKSPACE_DIR/projects" "Projetos Gerais"
     
     echo -e "${BLUE}═══════════════════ AÇÕES RÁPIDAS ═══════════════════${NC}"
     echo -e "${YELLOW}q.${NC} 🔍 Quick switch (buscar projeto)"
@@ -137,7 +137,7 @@ quick_search() {
     echo -e "${BLUE}📁 Resultados para '$search_term':${NC}"
     
     local found_projects=()
-    local base_dirs=("$WORKSPACE_DIR/nodejs" "$WORKSPACE_DIR/python-web" "$WORKSPACE_DIR/datascience" "$WORKSPACE_DIR/fullstack")
+    local base_dirs=("$WORKSPACE_DIR/nodejs" "$WORKSPACE_DIR/python-web" "$WORKSPACE_DIR/datascience" "$WORKSPACE_DIR/projects")
     
     for base_dir in "${base_dirs[@]}"; do
         if [ -d "$base_dir" ]; then
@@ -267,14 +267,15 @@ start_project_environment() {
             echo -e "${CYAN}📊 Jupyter: http://localhost:8888 (token: dev123)${NC}"
             echo -e "${CYAN}🧪 MLflow: http://localhost:5555${NC}"
             ;;
-        "fullstack")
+        "projects")
             echo -e "${CYAN}🌐 Verificando docker-compose no projeto...${NC}"
             if [ -f "$project_path/docker-compose.yml" ]; then
                 cd "$project_path"
                 docker-compose up -d
-                echo -e "${GREEN}✅ Ambiente Full-Stack ativo!${NC}"
+                echo -e "${GREEN}✅ Ambiente do projeto ativo!${NC}"
             else
                 echo -e "${YELLOW}⚠️ Nenhum docker-compose.yml encontrado${NC}"
+                echo -e "${CYAN}💡 Use um dos ambientes padrão (Node.js, Python, Data Science)${NC}"
             fi
             ;;
         *)
@@ -377,7 +378,7 @@ open_in_browser() {
         "datascience")
             urls+=("http://localhost:8888" "http://localhost:5555")
             ;;
-        "fullstack")
+        "projects")
             urls+=("http://localhost:3000" "http://localhost:8000/docs")
             ;;
     esac
@@ -555,7 +556,7 @@ list_all_projects() {
     echo ""
     
     local all_projects=()
-    local base_dirs=("$WORKSPACE_DIR/nodejs" "$WORKSPACE_DIR/python-web" "$WORKSPACE_DIR/datascience" "$WORKSPACE_DIR/fullstack")
+    local base_dirs=("$WORKSPACE_DIR/nodejs" "$WORKSPACE_DIR/python-web" "$WORKSPACE_DIR/datascience" "$WORKSPACE_DIR/projects")
     
     for base_dir in "${base_dirs[@]}"; do
         if [ -d "$base_dir" ]; then
@@ -567,18 +568,21 @@ list_all_projects() {
     
     if [ ${#all_projects[@]} -eq 0 ]; then
         echo -e "${YELLOW}📁 Nenhum projeto encontrado${NC}"
-        echo -e "${CYAN}💡 Use o Project Creator para criar novos projetos${NC}"
+        echo -e "${CYAN}💡 Use o Compose Templates para criar novos projetos${NC}"
         read -p "Pressione Enter..."
         return
     fi
     
-    # Ordenar por data de modificação
-    IFS=\n' all_projects=($(printf '%s\n' "${all_projects[@]}" | while read project; do
+    # Ordenar por data de modificação (corrigido)
+    local sorted_projects=()
+    while IFS= read -r line; do
+        sorted_projects+=("$(echo "$line" | cut -d' ' -f2-)")
+    done < <(printf '%s\n' "${all_projects[@]}" | while read -r project; do
         echo "$(stat -c %Y "$project" 2>/dev/null || echo 0) $project"
-    done | sort -nr | cut -d' ' -f2-))
+    done | sort -nr)
     
     local count=1
-    for project in "${all_projects[@]}"; do
+    for project in "${sorted_projects[@]}"; do
         local project_name=$(basename "$project")
         local project_type=$(basename "$(dirname "$project")")
         local last_modified=$(stat -c %y "$project" 2>/dev/null | cut -d' ' -f1)
@@ -604,23 +608,23 @@ list_all_projects() {
     done
     
     echo ""
-    echo -ne "${PURPLE}Escolha projeto [1-${#all_projects[@]}] ou Enter para voltar: ${NC}"
+    echo -ne "${PURPLE}Escolha projeto [1-${#sorted_projects[@]}] ou Enter para voltar: ${NC}"
     read choice
     
-    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#all_projects[@]} ]; then
-        local selected_project="${all_projects[$((choice-1))]}"
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#sorted_projects[@]} ]; then
+        local selected_project="${sorted_projects[$((choice-1))]}"
         open_project "$selected_project"
     fi
 }
 
 # Criar novo projeto
 create_new_project() {
-    if [ -f "./project-creator.sh" ]; then
-        echo -e "${CYAN}🚀 Abrindo Project Creator...${NC}"
-        ./project-creator.sh
+    if [ -f "./compose-templates.sh" ]; then
+        echo -e "${CYAN}🚀 Abrindo Compose Templates...${NC}"
+        ./compose-templates.sh
     else
-        echo -e "${YELLOW}⚠️ Project Creator não encontrado${NC}"
-        echo -e "${CYAN}💡 Certifique-se de que project-creator.sh está no mesmo diretório${NC}"
+        echo -e "${YELLOW}⚠️ Compose Templates não encontrado${NC}"
+        echo -e "${CYAN}💡 Certifique-se de que compose-templates.sh está no mesmo diretório${NC}"
         read -p "Pressione Enter..."
     fi
 }
@@ -631,7 +635,7 @@ navigate_by_number() {
     
     # Coletar todos os projetos ordenados
     local all_projects=()
-    local base_dirs=("$WORKSPACE_DIR/nodejs" "$WORKSPACE_DIR/python-web" "$WORKSPACE_DIR/datascience" "$WORKSPACE_DIR/fullstack")
+    local base_dirs=("$WORKSPACE_DIR/nodejs" "$WORKSPACE_DIR/python-web" "$WORKSPACE_DIR/datascience" "$WORKSPACE_DIR/projects")
     
     for base_dir in "${base_dirs[@]}"; do
         if [ -d "$base_dir" ]; then

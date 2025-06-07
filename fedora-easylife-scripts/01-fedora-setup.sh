@@ -229,7 +229,7 @@ install_dev_tools() {
     
     # Editores e IDEs
     echo -e "${CYAN}Instalando editores...${NC}"
-    dnf install -y vim neovim code 2>&1 | tee -a "$LOG_FILE"
+    dnf install -y code 2>&1 | tee -a "$LOG_FILE"
     
     # Configurar Docker
     setup_docker || { 
@@ -241,7 +241,7 @@ install_dev_tools() {
     # Ferramentas essenciais para desenvolvimento
     echo -e "${CYAN}Instalando ferramentas essenciais...${NC}"
     dnf install -y \
-        curl wget tree htop btop \
+        curl wget tree htop \
         unzip p7zip p7zip-plugins unrar \
         jq yq \
         make cmake \
@@ -307,11 +307,11 @@ install_applications() {
     
     # Editores de texto e office
     echo -e "${CYAN}Instalando suíte office...${NC}"
-    dnf install -y libreoffice thunderbird 2>&1 | tee -a "$LOG_FILE"
+    dnf install -y libreoffice 2>&1 | tee -a "$LOG_FILE"
     
     # Multimídia
     echo -e "${CYAN}Instalando aplicativos multimídia...${NC}"
-    dnf install -y vlc gimp audacity 2>&1 | tee -a "$LOG_FILE"
+    dnf install -y vlc gimp inkscape 2>&1 | tee -a "$LOG_FILE"
     
     # Utilitários do sistema
     echo -e "${CYAN}Instalando utilitários do sistema...${NC}"
