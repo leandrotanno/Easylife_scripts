@@ -255,6 +255,7 @@ install_dev_tools() {
         bzip2-devel \
         ncurses-devel \
         discord \
+        dbeaver-ce \ 
         2>&1 | tee -a "$LOG_FILE"
     
     log_message "✓ Ferramentas de desenvolvimento instaladas"
@@ -308,7 +309,7 @@ install_applications() {
     
     # Editores de texto e office
     echo -e "${CYAN}Instalando suíte office...${NC}"
-    dnf install -y libreoffice 2>&1 | tee -a "$LOG_FILE"
+    dnf install -y onlyoffice-desktopeditors 2>&1 | tee -a "$LOG_FILE"
     
     # Multimídia
     echo -e "${CYAN}Instalando aplicativos multimídia...${NC}"
