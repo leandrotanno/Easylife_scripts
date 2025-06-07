@@ -254,6 +254,7 @@ install_dev_tools() {
         zlib-devel \
         bzip2-devel \
         ncurses-devel \
+        discord \
         2>&1 | tee -a "$LOG_FILE"
     
     log_message "✓ Ferramentas de desenvolvimento instaladas"
